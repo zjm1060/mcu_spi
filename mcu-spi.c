@@ -9,7 +9,15 @@
 
 MODULE_LICENSE("GPL");
 
-#define BOARD_NAME "mcu_afe"
+#define BOARD_NAME "afe"
+
+struct spi_data_struct{
+    unsigned short header;
+    unsigned int timestamp;
+    float freq;
+    short data_a[8][512];
+    short data_b[8][512];
+};
 
 struct spi_afe_data {
 	struct spi_device *client;
@@ -22,8 +30,8 @@ struct spi_afe_data {
     struct cdev cdev;
     struct class *cls;
 
-    uint32_t irq_count;
-    uint32_t read_count;
+    unsigned long irq_count;
+    unsigned long read_count;
     struct gpio_desc *irq_gpio;
 
     void *buffer;
@@ -44,6 +52,17 @@ static struct spi_device_id spi_afe[] = {
 	{ },
 };
 MODULE_DEVICE_TABLE(spi, spi_afe);
+
+// static inline int __spi_read(struct spi_device *spi, void *buf, size_t len)
+// {
+// 	struct spi_transfer	t = {
+// 			.rx_buf		= buf,
+// 			.len		= len,
+//             .delay_usecs = 100,
+// 		};
+
+// 	return spi_sync_transfer(spi, &t, 1);
+// }
 
 static int spi_afe_open(struct inode *inode, struct file *filp)
 {
@@ -108,6 +127,9 @@ static irqreturn_t spi_afe_irq_thread_handler(int irq, void *dev_id)
     struct spi_afe_data *devInfo = dev_id;
 
     spi_read(devInfo->client, devInfo->buffer, devInfo->bufferSize);
+    devInfo->irq_count ++;
+
+    wmb();
 
     wake_up_interruptible(&devInfo->rxq);
 
@@ -116,9 +138,7 @@ static irqreturn_t spi_afe_irq_thread_handler(int irq, void *dev_id)
 
 static irqreturn_t  spi_afe_gpio_irq_handler(int irq, void *dev_id) 
 {
-    struct spi_afe_data *devInfo = dev_id;
-
-    devInfo->irq_count ++;
+    // struct spi_afe_data *devInfo = dev_id;    
 
 	// printk("gpio_irq: Interrupt was triggered and ISR was called! %d\n", devInfo->irq_count);
 	return IRQ_WAKE_THREAD;
@@ -181,7 +201,8 @@ static int spi_afe_probe(struct spi_device *client)
 		return -ENOMEM;
 	}
 
-    devInfo->bufferSize = 10240;
+    devInfo->bufferSize = sizeof(struct spi_data_struct);
+    printk("bufferSize: %lu\n", devInfo->bufferSize);
 
     devInfo->buffer = devm_kzalloc(&client->dev, devInfo->bufferSize, GFP_KERNEL);
 
