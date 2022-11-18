@@ -9,7 +9,7 @@
 
 MODULE_LICENSE("GPL");
 
-#define BOARD_NAME "afe"
+#define BOARD_NAME "pssd"
 
 struct spi_data_struct{
     unsigned short header;
@@ -19,7 +19,7 @@ struct spi_data_struct{
     short data_b[8][512];
 };
 
-struct spi_afe_data {
+struct spi_pssd_data {
 	struct spi_device *client;
 
     struct semaphore read_sem;
@@ -40,18 +40,18 @@ struct spi_afe_data {
     unsigned int irq;
 };
 
-static struct of_device_id spi_afe_driver_ids[] = {
+static struct of_device_id spi_pssd_driver_ids[] = {
 	{
-		.compatible = "mcu,spi-afe",
+		.compatible = "mcu,spi-pssd",
 	}, { /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, spi_afe_driver_ids);
+MODULE_DEVICE_TABLE(of, spi_pssd_driver_ids);
 
-static struct spi_device_id spi_afe[] = {
-	{"spi_afe", 0},
+static struct spi_device_id spi_pssd[] = {
+	{"spi_pssd", 0},
 	{ },
 };
-MODULE_DEVICE_TABLE(spi, spi_afe);
+MODULE_DEVICE_TABLE(spi, spi_pssd);
 
 // static inline int __spi_read(struct spi_device *spi, void *buf, size_t len)
 // {
@@ -64,18 +64,18 @@ MODULE_DEVICE_TABLE(spi, spi_afe);
 // 	return spi_sync_transfer(spi, &t, 1);
 // }
 
-static int spi_afe_open(struct inode *inode, struct file *filp)
+static int spi_pssd_open(struct inode *inode, struct file *filp)
 {
-    struct spi_afe_data *devInfo = container_of(inode->i_cdev, struct spi_afe_data, cdev);
+    struct spi_pssd_data *devInfo = container_of(inode->i_cdev, struct spi_pssd_data, cdev);
 
     filp->private_data = devInfo;
 
     return 0;
 }
 
-static ssize_t spi_afe_read(struct file *filp,char __user *buf,size_t size,loff_t *ppos) 
+static ssize_t spi_pssd_read(struct file *filp,char __user *buf,size_t size,loff_t *ppos) 
 {
-    struct spi_afe_data * devInfo = (struct spi_afe_data *) filp->private_data;
+    struct spi_pssd_data * devInfo = (struct spi_pssd_data *) filp->private_data;
     ssize_t bytesDone = 0;
 
     // printk("try read %lu\n", size);
@@ -115,16 +115,16 @@ static ssize_t spi_afe_read(struct file *filp,char __user *buf,size_t size,loff_
 
 struct file_operations fileOps = {
 	.owner =    THIS_MODULE,
-	.read =     spi_afe_read,
+	.read =     spi_pssd_read,
 	// .write =    fpga_write,
-	.open =     spi_afe_open,
+	.open =     spi_pssd_open,
 	// .release =  fpga_close,
 };
 
 
-static irqreturn_t spi_afe_irq_thread_handler(int irq, void *dev_id)
+static irqreturn_t spi_pssd_irq_thread_handler(int irq, void *dev_id)
 {
-    struct spi_afe_data *devInfo = dev_id;
+    struct spi_pssd_data *devInfo = dev_id;
 
     spi_read(devInfo->client, devInfo->buffer, devInfo->bufferSize);
     devInfo->irq_count ++;
@@ -136,15 +136,15 @@ static irqreturn_t spi_afe_irq_thread_handler(int irq, void *dev_id)
     return IRQ_HANDLED;
 }
 
-static irqreturn_t  spi_afe_gpio_irq_handler(int irq, void *dev_id) 
+static irqreturn_t  spi_pssd_gpio_irq_handler(int irq, void *dev_id) 
 {
-    // struct spi_afe_data *devInfo = dev_id;    
+    // struct spi_pssd_data *devInfo = dev_id;    
 
 	// printk("gpio_irq: Interrupt was triggered and ISR was called! %d\n", devInfo->irq_count);
 	return IRQ_WAKE_THREAD;
 }
 
-static int setup_chrdev(struct spi_afe_data *devInfo){
+static int setup_chrdev(struct spi_pssd_data *devInfo){
 	/*
 	Setup the /dev/deviceName to allow user programs to read/write to the driver.
 	*/
@@ -181,23 +181,23 @@ static int setup_chrdev(struct spi_afe_data *devInfo){
 	return 0;
 }
 
-static int spi_afe_probe(struct spi_device *client)
+static int spi_pssd_probe(struct spi_device *client)
 {
-	struct spi_afe_data *devInfo;
+	struct spi_pssd_data *devInfo;
 	int ret;
 
-	printk("spi_afe - Now I am in the Probe function!\n");
+	printk("spi_pssd - Now I am in the Probe function!\n");
 
     // if(!device_property_present(&client->dev, "interrupt")) {
-	// 	printk("spi_afe - Error! Device property 'interrupt' not found!\n");
+	// 	printk("spi_pssd - Error! Device property 'interrupt' not found!\n");
 	// 	return -1;
 	// }
 
     
 
-	devInfo = devm_kzalloc(&client->dev, sizeof(struct spi_afe_data), GFP_KERNEL);
+	devInfo = devm_kzalloc(&client->dev, sizeof(struct spi_pssd_data), GFP_KERNEL);
 	if(!devInfo) {
-		printk("spi_afe - Error! Out of memory\n");
+		printk("spi_pssd - Error! Out of memory\n");
 		return -ENOMEM;
 	}
 
@@ -221,7 +221,7 @@ static int spi_afe_probe(struct spi_device *client)
 
     if(devInfo->irq){
         // ret = devm_request_irq(&client->dev, devInfo->irq, (irq_handler_t)gpio_irq_handler, IRQF_TRIGGER_RISING, BOARD_NAME, devInfo);
-        ret = devm_request_threaded_irq(&client->dev, devInfo->irq, spi_afe_gpio_irq_handler, spi_afe_irq_thread_handler, IRQF_TRIGGER_RISING, BOARD_NAME, devInfo);
+        ret = devm_request_threaded_irq(&client->dev, devInfo->irq, spi_pssd_gpio_irq_handler, spi_pssd_irq_thread_handler, IRQF_TRIGGER_RISING, BOARD_NAME, devInfo);
         if(ret){
             printk("Error!\nCan not request interrupt nr.: %d\n", devInfo->irq);
             return -1;
@@ -234,7 +234,7 @@ static int spi_afe_probe(struct spi_device *client)
 
 	ret = spi_setup(client);
 	if(ret < 0) {
-		printk("spi_afe - Error! Failed to set up the SPI Bus\n");
+		printk("spi_pssd - Error! Failed to set up the SPI Bus\n");
 		return ret;
 	}
 	
@@ -243,11 +243,11 @@ static int spi_afe_probe(struct spi_device *client)
 	return setup_chrdev(devInfo);
 }
 
-static int spi_afe_remove(struct spi_device *client) 
+static int spi_pssd_remove(struct spi_device *client) 
 {
-    struct spi_afe_data *devInfo = spi_get_drvdata(client);
+    struct spi_pssd_data *devInfo = spi_get_drvdata(client);
 
-    printk("spi_afe - Now I am in the remove function.\n");
+    printk("spi_pssd - Now I am in the remove function.\n");
 
     // gpio_free(devInfo->interrupt);
     disable_irq(devInfo->irq);
@@ -265,14 +265,14 @@ static int spi_afe_remove(struct spi_device *client)
 	return 0;
 }
 
-static struct spi_driver spi_afe_driver = {
-	.probe = spi_afe_probe,
-	.remove = spi_afe_remove,
-	.id_table = spi_afe,
+static struct spi_driver spi_pssd_driver = {
+	.probe = spi_pssd_probe,
+	.remove = spi_pssd_remove,
+	.id_table = spi_pssd,
 	.driver = {
-		.name = "spi_afe",
-		.of_match_table = spi_afe_driver_ids,
+		.name = "spi_pssd",
+		.of_match_table = spi_pssd_driver_ids,
 	},
 };
 
-module_spi_driver(spi_afe_driver);
+module_spi_driver(spi_pssd_driver);

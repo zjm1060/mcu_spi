@@ -1,5 +1,5 @@
-obj-m := mcu_spi.o
-mcu_spi-objs := mcu-spi.o
+obj-m := pssd.o
+pssd-objs := spi_pssd.o
 KERNELDIR := ../kernel
 PWD := $(shell pwd)
 modules:
