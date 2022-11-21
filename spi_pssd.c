@@ -6,17 +6,26 @@
 #include <linux/interrupt.h>
 #include <linux/uaccess.h>
 #include <linux/cdev.h>
+#include <linux/time.h>
 
 MODULE_LICENSE("GPL");
 
 #define BOARD_NAME "pssd"
 
+typedef struct {
+	short data[8][512];
+}chip_data;
+
 struct spi_data_struct{
-    unsigned short header;
-    unsigned int timestamp;
+    unsigned int header;
+    unsigned int serial;
+    unsigned int samples_pre_cycle;
+    unsigned int chips;
+    unsigned int sec;
+    unsigned int micro_sec;
     float freq;
-    short data_a[8][512];
-    short data_b[8][512];
+
+    chip_data chip[2];
 };
 
 struct spi_pssd_data {
@@ -70,6 +79,8 @@ static int spi_pssd_open(struct inode *inode, struct file *filp)
 
     filp->private_data = devInfo;
 
+    devInfo->read_count = devInfo->irq_count;
+
     return 0;
 }
 
@@ -106,7 +117,7 @@ static ssize_t spi_pssd_read(struct file *filp,char __user *buf,size_t size,loff
     bytesDone = copy_to_user(buf, devInfo->buffer, size);
     // printk("copy data %lu bytes\n", bytesDone);
 
-    devInfo->read_count ++;
+    devInfo->read_count ++;//= devInfo->irq_count;
 
     up(&devInfo->read_sem);
 
@@ -125,9 +136,13 @@ struct file_operations fileOps = {
 static irqreturn_t spi_pssd_irq_thread_handler(int irq, void *dev_id)
 {
     struct spi_pssd_data *devInfo = dev_id;
+    struct spi_data_struct *sd = devInfo->buffer;
 
     spi_read(devInfo->client, devInfo->buffer, devInfo->bufferSize);
     devInfo->irq_count ++;
+
+    sd->header = 0x77478507UL;
+    sd->serial = devInfo->irq_count;
 
     wmb();
 
